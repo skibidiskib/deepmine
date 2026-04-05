@@ -1,0 +1,82 @@
+# =============================================================================
+# DEEPMINE Pipeline Configuration
+# Deep Earth Exploration Pipeline for Microbial INhibitor Extraction
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Input: metagenomic datasets to process
+# ---------------------------------------------------------------------------
+samples:
+  - SRR12345678   # Hot spring sediment, Yellowstone
+  - SRR23456789   # Deep-sea hydrothermal vent, Mid-Atlantic Ridge
+  - SRR34567890   # Cave biofilm, Lechuguilla Cave
+  - SRR45678901   # Permafrost core, Siberian tundra
+  - SRR56789012   # Acid mine drainage, Iron Mountain
+
+output_dir: "results"
+
+# ---------------------------------------------------------------------------
+# Assembly: reconstruct contigs from short reads
+# ---------------------------------------------------------------------------
+assembly:
+  megahit_preset: "meta-large"     # meta-sensitive | meta-large
+  min_contig_length: 5000          # bp; shorter contigs rarely contain full BGCs
+  k_list: "21,29,39,59,79,99,119,141"
+  threads: 8
+  memory: 0.9                      # Fraction of available RAM for MEGAHIT
+
+# ---------------------------------------------------------------------------
+# Gene Calling
+# ---------------------------------------------------------------------------
+gene_calling:
+  prodigal_mode: "meta"            # "meta" for metagenomes, "single" for isolates
+
+# ---------------------------------------------------------------------------
+# BGC Detection: identify biosynthetic gene clusters
+# ---------------------------------------------------------------------------
+bgc_detection:
+  # antiSMASH
+  antismash_taxon: "bacteria"
+  antismash_genefinding: "prodigal-m"
+  antismash_extra_args: "--cb-general --cb-knownclusters --cb-subclusters --asf --pfam2go"
+  antismash_threads: 8
+
+  # GECCO
+  gecco_cds: true
+  gecco_threshold: 0.8
+  gecco_threads: 4
+
+  # DeepBGC
+  deepbgc_detector: "deepbgc"
+  deepbgc_score_threshold: 0.5
+  deepbgc_threads: 4
+
+  # Ensemble: a BGC must be detected by at least this many tools to proceed
+  min_consensus: 2
+
+# ---------------------------------------------------------------------------
+# Novelty filtering: discard known / redundant clusters
+# ---------------------------------------------------------------------------
+novelty:
+  bigslice_db: "databases/bigslice"
+  bigslice_threshold: 900
+  bigslice_threads: 8
+  max_known_distance: 0.3          # Distance > this from nearest MIBiG = novel
+
+# ---------------------------------------------------------------------------
+# Scoring: ML model ranks candidates by predicted bioactivity
+# ---------------------------------------------------------------------------
+scoring:
+  model_path: "models/activity_scorer.pt"
+  feature_set: "all"               # all | structural | genomic
+  score_threshold: 0.5             # Candidates below this are dropped
+  top_n: 50                        # Max candidates in final ranking
+
+# ---------------------------------------------------------------------------
+# Compute resources (defaults)
+# ---------------------------------------------------------------------------
+resources:
+  default_threads: 4
+  default_mem_mb: 8000
+  high_mem_mb: 32000
+  tmpdir: "/tmp/deepmine"

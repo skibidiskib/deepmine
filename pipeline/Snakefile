@@ -1,0 +1,98 @@
+# =============================================================================
+# DEEPMINE - Metagenomic Mining Pipeline for Antibiotic Discovery
+# =============================================================================
+#
+# Pipeline flow:
+#   raw reads -> assembly -> gene calling -> BGC detection (3 tools)
+#   -> ensemble consensus -> novelty filtering -> structure prediction
+#   -> activity scoring -> ranked output
+#
+# Usage:
+#   snakemake --cores 16 --use-conda
+#   snakemake --cores 16 --use-conda -n   # dry run
+#   snakemake --cores 16 --use-conda --dag | dot -Tsvg > dag.svg
+#
+# =============================================================================
+
+configfile: "config/config.yaml"
+
+SAMPLES = config["samples"]
+OUTDIR = config["output_dir"]
+
+
+# Pull in all rule modules
+include: "workflow/rules/assembly.smk"
+include: "workflow/rules/bgc_detection.smk"
+include: "workflow/rules/novelty.smk"
+include: "workflow/rules/scoring.smk"
+
+
+rule all:
+    """
+    Terminal target: produce the final ranked candidate table and a
+    per-sample summary report.
+    """
+    input:
+        expand(
+            f"{OUTDIR}/{{sample}}/ranked_candidates.tsv",
+            sample=SAMPLES,
+        ),
+        f"{OUTDIR}/deepmine_report.html",
+
+
+rule aggregate_report:
+    """
+    Merge per-sample ranked candidates into a single pipeline report.
+    """
+    input:
+        tables=expand(
+            f"{OUTDIR}/{{sample}}/ranked_candidates.tsv",
+            sample=SAMPLES,
+        ),
+    output:
+        report=f"{OUTDIR}/deepmine_report.html",
+    log:
+        f"{OUTDIR}/logs/aggregate_report.log",
+    benchmark:
+        f"{OUTDIR}/benchmarks/aggregate_report.txt"
+    run:
+        import pandas as pd
+        from pathlib import Path
+        from datetime import datetime
+
+        frames = []
+        for tsv in input.tables:
+            sample_id = Path(tsv).parent.name
+            df = pd.read_csv(tsv, sep="\t")
+            df.insert(0, "source_sample", sample_id)
+            frames.append(df)
+
+        combined = pd.concat(frames, ignore_index=True)
+        combined.sort_values("activity_score", ascending=False, inplace=True)
+
+        # Write combined TSV
+        combined_path = Path(output.report).with_suffix(".tsv")
+        combined.to_csv(combined_path, sep="\t", index=False)
+
+        # Write minimal HTML report
+        html = [
+            "<!DOCTYPE html><html><head>",
+            "<meta charset='utf-8'>",
+            "<title>DEEPMINE Report</title>",
+            "<style>",
+            "  body { font-family: sans-serif; margin: 2em; }",
+            "  table { border-collapse: collapse; width: 100%; }",
+            "  th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; }",
+            "  th { background: #2c3e50; color: white; }",
+            "  tr:nth-child(even) { background: #f2f2f2; }",
+            "  .header { color: #2c3e50; }",
+            "</style></head><body>",
+            f"<h1 class='header'>DEEPMINE Pipeline Report</h1>",
+            f"<p>Generated: {datetime.now().isoformat()}</p>",
+            f"<p>Total candidates across {len(SAMPLES)} samples: "
+            f"<strong>{len(combined)}</strong></p>",
+            combined.to_html(index=False),
+            "</body></html>",
+        ]
+        with open(output.report, "w") as fh:
+            fh.write("\n".join(html))

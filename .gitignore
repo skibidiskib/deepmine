@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+dashboard/node_modules/
+pipeline/.venv/
+
+# Build output
+dashboard/.next/
+dashboard/data/
+pipeline/*.egg-info/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Data files (too large for git)
+pipeline/data/*.fastq*
+pipeline/data/*.fasta*
+pipeline/data/*.gbk
+pipeline/results/
+pipeline/.snakemake/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local

@@ -1,0 +1,110 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+wheels/
+pip-wheel-metadata/
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pytype/
+
+# Snakemake
+.snakemake/
+slurm_logs/
+
+# Bioinformatics data files
+data/*.fastq
+data/*.fastq.gz
+data/*.fasta
+data/*.fasta.gz
+data/*.fna
+data/*.fna.gz
+data/*.fa
+data/*.fa.gz
+data/*.bam
+data/*.bam.bai
+data/*.sam
+data/*.sra
+data/*.gbk
+data/*.gbff
+data/*.gff
+data/*.gff3
+
+# Raw sequencing runs (never commit these)
+data/raw/
+data/sra/
+
+# Pipeline results and intermediate outputs
+results/
+output/
+intermediate/
+logs/
+benchmarks/
+
+# Large databases (downloaded at runtime)
+databases/
+db/antismash/
+db/mibig/
+db/bigslice/
+db/pfam/
+db/hmm/
+
+# Model weights and checkpoints
+models/*.pt
+models/*.pth
+models/*.ckpt
+models/*.bin
+checkpoints/
+
+# Jupyter notebooks (checkpoints only)
+.ipynb_checkpoints/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment variables
+.env
+.env.local
+
+# Temporary files
+tmp/
+*.tmp
+*.bak
+
+# Conda
+conda-meta/
+*.conda

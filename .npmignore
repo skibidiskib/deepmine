@@ -1,0 +1,13 @@
+# Don't publish the pipeline to npm (Python, too large)
+pipeline/
+
+# Don't publish data or build artifacts
+dashboard/.next/
+dashboard/data/
+dashboard/node_modules/
+
+# Dev files
+.git/
+.github/
+*.md
+!README.md

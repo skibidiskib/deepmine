@@ -1,0 +1,41 @@
+{
+  "name": "deepmine",
+  "version": "0.1.0",
+  "description": "Mine Earth's microbiome for new antibiotics. Community dashboard + metagenomic BGC discovery pipeline.",
+  "keywords": [
+    "antibiotics",
+    "bioinformatics",
+    "metagenomics",
+    "biosynthetic-gene-clusters",
+    "drug-discovery",
+    "dashboard",
+    "bgc",
+    "antibiotic-resistance"
+  ],
+  "license": "MIT",
+  "author": "DEEPMINE Contributors",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/skibidiskib/deepmine.git"
+  },
+  "homepage": "https://github.com/skibidiskib/deepmine",
+  "bugs": "https://github.com/skibidiskib/deepmine/issues",
+  "bin": {
+    "deepmine": "./bin/cli.js"
+  },
+  "files": [
+    "bin/",
+    "dashboard/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dashboard": "cd dashboard && npm run dev",
+    "dashboard:build": "cd dashboard && npm run build",
+    "dashboard:start": "cd dashboard && npm start",
+    "postinstall": "cd dashboard && npm install --omit=dev"
+  }
+}
