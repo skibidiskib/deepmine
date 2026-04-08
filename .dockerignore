@@ -1,0 +1,42 @@
+# Git and CI
+.git/
+.github/
+
+# Node.js / Dashboard (excluded because the Docker image only runs the
+# pipeline, not the dashboard. The dashboard is hosted separately.)
+node_modules/
+dashboard/
+dashboard/.next/
+dashboard/node_modules/
+dashboard/data/
+
+# Python build artifacts and virtual environments
+pipeline/.venv/
+pipeline/.snakemake/
+__pycache__/
+*.pyc
+*.pyo
+
+# Large data files that should not be baked into the image
+pipeline/results/
+pipeline/data/*.fastq*
+pipeline/data/*.fasta*
+pipeline/data/*.gbk
+
+# OS and editor files
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Environment and secrets
+.env
+.env.local
+
+# Documentation (not needed at runtime)
+*.md
+!pipeline/README.md
+
+# CLI bin (npm distribution only, not used in Docker)
+bin/

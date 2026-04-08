@@ -1,0 +1,49 @@
+# DEEPMINE Standard - Full 3-tool ensemble BGC detection (~5-6 GB)
+# Uses antiSMASH + GECCO + DeepBGC with heuristic scoring (no PyTorch)
+# Best for: enthusiasts wanting better accuracy
+
+FROM condaforge/mambaforge:latest
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    procps curl ca-certificates build-essential tzdata && \
+    rm -rf /var/lib/apt/lists/*
+
+# Core bioinformatics tools
+RUN mamba install -y -c bioconda -c conda-forge \
+    megahit \
+    prodigal \
+    seqkit \
+    sra-tools \
+    pigz \
+    hmmer \
+    && mamba clean --all -f -y
+
+# All three BGC detection tools
+RUN pip install --no-cache-dir \
+    gecco-tool>=0.9 \
+    deepbgc>=0.1.30
+
+# antiSMASH with minimal databases
+RUN pip install --no-cache-dir antismash && \
+    download-antismash-databases --minimal 2>/dev/null || true
+
+# Copy and install DEEPMINE pipeline (without PyTorch)
+WORKDIR /app
+COPY pipeline/ /app/pipeline/
+RUN pip install --no-cache-dir --no-deps -e /app/pipeline/ && \
+    pip install --no-cache-dir pyyaml snakemake
+
+COPY docker/auto.py /app/auto.py
+COPY docker/auto_config.yaml /app/config/auto_config.yaml
+
+RUN mkdir -p /app/workdir /data/processed
+
+ENV DEEPMINE_THREADS=4 \
+    DEEPMINE_DASHBOARD_URL=https://deepmine.computers.ch \
+    DEEPMINE_USERNAME=anonymous \
+    DEEPMINE_WORKDIR=/app/workdir \
+    DEEPMINE_MODE=standard
+
+VOLUME ["/data"]
+
+ENTRYPOINT ["nice", "-n", "19", "python", "/app/auto.py"]

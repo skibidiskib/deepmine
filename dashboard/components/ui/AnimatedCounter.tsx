@@ -22,6 +22,7 @@ export default function AnimatedCounter({
   suffix = '',
   className,
 }: AnimatedCounterProps) {
+  const isDecimal = value > 0 && value < 1;
   const [display, setDisplay] = useState(0);
   const startTime = useRef<number | null>(null);
   const rafId = useRef<number>(0);
@@ -35,7 +36,8 @@ export default function AnimatedCounter({
       const progress = Math.min(elapsed / duration, 1);
       const easedProgress = easeOutExpo(progress);
 
-      setDisplay(Math.round(easedProgress * value));
+      const current = easedProgress * value;
+      setDisplay(isDecimal ? parseFloat(current.toFixed(2)) : Math.round(current));
 
       if (progress < 1) {
         rafId.current = requestAnimationFrame(tick);
@@ -45,12 +47,12 @@ export default function AnimatedCounter({
     rafId.current = requestAnimationFrame(tick);
 
     return () => cancelAnimationFrame(rafId.current);
-  }, [value, duration]);
+  }, [value, duration, isDecimal]);
 
   return (
     <span className={cn('tabular-nums', className)}>
       {prefix}
-      {formatNumber(display)}
+      {isDecimal ? display.toFixed(2) : formatNumber(display)}
       {suffix}
     </span>
   );

@@ -1,6 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { insertSubmission, sseEmitter } from '@/lib/db';
+import { insertSubmission, sseEmitter, hasSeedData, clearSeedData } from '@/lib/db';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { pushDiscoveriesToGitHub } from '@/lib/github-push';
+import { scoreBatch } from '@/lib/novelty-scorer';
 import type { SubmitPayload } from '@/lib/types';
+
+export const dynamic = 'force-dynamic';
+
+const USERNAME_RE = /^[a-zA-Z0-9_.\-]{1,40}$/;
+const MAX_CANDIDATES = 1000;
+
+function isScoreValid(v: unknown): boolean {
+  return typeof v === 'number' && v >= 0 && v <= 1;
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204 });
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,9 +30,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!Array.isArray(body.candidates) || body.candidates.length === 0) {
+    // Username format validation
+    if (!USERNAME_RE.test(body.username)) {
       return NextResponse.json(
-        { error: 'candidates must be a non-empty array' },
+        { error: 'username must be 1-40 alphanumeric characters, hyphens, or underscores' },
+        { status: 400 }
+      );
+    }
+
+    // Rate limiting
+    if (!checkRateLimit(body.username)) {
+      return NextResponse.json(
+        { error: 'Rate limit exceeded. Try again in a minute.' },
+        { status: 429 }
+      );
+    }
+
+    if (!Array.isArray(body.candidates)) {
+      return NextResponse.json(
+        { error: 'candidates must be an array' },
+        { status: 400 }
+      );
+    }
+
+    if (body.candidates.length > MAX_CANDIDATES) {
+      return NextResponse.json(
+        { error: `candidates array exceeds maximum of ${MAX_CANDIDATES}` },
         { status: 400 }
       );
     }
@@ -26,6 +65,31 @@ export async function POST(request: NextRequest) {
         { error: 'samples must be a non-empty array' },
         { status: 400 }
       );
+    }
+
+    // Normalize candidate scores - default missing values to 0, clamp to [0,1]
+    for (const c of body.candidates) {
+      c.activity_score = Math.max(0, Math.min(1, Number(c.activity_score) || 0));
+      c.confidence = Math.max(0, Math.min(1, Number(c.confidence) || 0));
+    }
+
+    // Server-side novelty scoring: BLAST against MIBiG 2,502 known BGCs
+    const noveltyScores = scoreBatch(body.candidates);
+    for (const c of body.candidates) {
+      const score = noveltyScores.get(c.bgc_id);
+      if (score) {
+        c.novelty_distance = score.novelty_distance;
+      } else {
+        c.novelty_distance = Math.max(0, Math.min(1, Number(c.novelty_distance) || 0));
+      }
+    }
+
+    // Auto-clear seed/demo data when the first real submission arrives
+    let seedCleared = false;
+    if (hasSeedData()) {
+      clearSeedData();
+      seedCleared = true;
+      console.log('[POST /api/submit] Seed data cleared on first real submission');
     }
 
     const result = insertSubmission(body);
@@ -52,10 +116,34 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Auto-push BGC sequences to GitHub (non-blocking)
+    const bgcEntries = body.candidates
+      .filter((c) => c.sequence && c.sequence.length > 0)
+      .map((c) => ({
+        bgc_id: c.bgc_id,
+        source_sample: body.samples?.[0]?.sra_accession || '',
+        bgc_type: c.bgc_type,
+        activity_score: c.activity_score,
+        novelty_distance: c.novelty_distance || 0,
+        confidence: c.confidence,
+        sequence: c.sequence || '',
+        sequence_length: c.sequence_length || 0,
+        environment: body.samples?.[0]?.environment || '',
+        username: body.username,
+        discovered_at: new Date().toISOString(),
+      }));
+
+    if (bgcEntries.length > 0) {
+      try {
+        pushDiscoveriesToGitHub(bgcEntries);
+      } catch { /* non-critical */ }
+    }
+
     return NextResponse.json({
       success: true,
       run_id: body.run_id,
       discoveries_count: result.discoveriesCount,
+      seed_cleared: seedCleared,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Internal server error';

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="8" fill="#0f172a"/>
+  <g stroke="#10b981" stroke-width="2" fill="none" stroke-linecap="round">
+    <!-- DNA double helix -->
+    <path d="M10 4 C10 4, 22 10, 22 16 C22 22, 10 28, 10 28"/>
+    <path d="M22 4 C22 4, 10 10, 10 16 C10 22, 22 28, 22 28"/>
+    <!-- Rungs -->
+    <line x1="12" y1="9" x2="20" y2="9" stroke-width="1.5" opacity="0.6"/>
+    <line x1="11" y1="16" x2="21" y2="16" stroke-width="1.5" opacity="0.6"/>
+    <line x1="12" y1="23" x2="20" y2="23" stroke-width="1.5" opacity="0.6"/>
+  </g>
+</svg>

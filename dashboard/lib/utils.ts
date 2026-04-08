@@ -14,7 +14,8 @@ export function formatScore(score: number): string {
 }
 
 export function formatDate(iso: string): string {
-  const date = new Date(iso);
+  // DB stores UTC timestamps without 'Z' suffix, so append it for correct parsing
+  const date = new Date(iso.includes('T') || iso.includes('Z') ? iso : iso + 'Z');
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffSeconds = Math.floor(diffMs / 1000);

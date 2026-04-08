@@ -91,6 +91,8 @@ export interface CandidateInput {
   novelty_distance: number;
   activity_score: number;
   confidence: number;
+  sequence?: string;
+  sequence_length?: number;
 }
 
 export interface TimelineEntry {

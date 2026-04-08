@@ -32,10 +32,11 @@ export default function StatCard({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: index * 0.1 }}
+      className="h-full"
     >
       <GlassCard
         hover
-        className={cn('relative overflow-hidden border-l-4', color)}
+        className={cn('relative overflow-hidden border-l-4 h-full', color)}
       >
         <Icon className="absolute top-3 right-3 sm:top-4 sm:right-4 w-6 h-6 sm:w-8 sm:h-8 text-white opacity-40" />
         <p className="text-xs sm:text-sm text-gray-400 mb-0.5 sm:mb-1">{title}</p>

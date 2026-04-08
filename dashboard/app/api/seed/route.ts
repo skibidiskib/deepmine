@@ -1,17 +1,21 @@
 import { NextResponse } from 'next/server';
-import db from '@/lib/db';
+import db, { clearAllData } from '@/lib/db';
+
+export const dynamic = 'force-dynamic';
 
 // ── Realistic demo data generators ──────────────────────────────────────────
 
 const USERS = [
-  { username: 'dr_caveminer', display_name: 'Dr. Elena Vasquez', institution: 'MIT Broad Institute', github_url: 'https://github.com/evasquez' },
-  { username: 'bioprospector', display_name: 'Kenji Tanaka', institution: 'University of Tokyo', github_url: 'https://github.com/ktanaka-bgc' },
-  { username: 'nrps_hunter', display_name: 'Priya Sharma', institution: 'CSIR-IMTECH India', github_url: 'https://github.com/psharma-nrps' },
-  { username: 'deep_seq_lab', display_name: 'Marcus Chen', institution: 'Scripps Oceanography', github_url: 'https://github.com/mchen-scripps' },
-  { username: 'extremophile_fan', display_name: 'Astrid Lindqvist', institution: 'Uppsala University', github_url: 'https://github.com/alindqvist' },
-  { username: 'soil_prophet', display_name: 'Oluwaseun Adebayo', institution: 'IITA Nigeria', github_url: 'https://github.com/oadebayo-soil' },
-  { username: 'pks_wizard', display_name: 'Clara Dubois', institution: 'ETH Zurich', github_url: 'https://github.com/cdubois-pks' },
-  { username: 'microbe_miner', display_name: 'Raj Patel', institution: 'JNU New Delhi', github_url: 'https://github.com/rpatel-jnu' },
+  { username: 'bright.cave', display_name: 'bright.cave', institution: '', github_url: '' },
+  { username: 'silent.reef', display_name: 'silent.reef', institution: '', github_url: '' },
+  { username: 'deep.spore', display_name: 'deep.spore', institution: '', github_url: '' },
+  { username: 'swift.ridge', display_name: 'swift.ridge', institution: '', github_url: '' },
+  { username: 'bold.delta', display_name: 'bold.delta', institution: '', github_url: '' },
+  { username: 'calm.grove', display_name: 'calm.grove', institution: '', github_url: '' },
+  { username: 'vast.field', display_name: 'vast.field', institution: '', github_url: '' },
+  { username: 'keen.shore', display_name: 'keen.shore', institution: '', github_url: '' },
+  { username: 'polar.fern', display_name: 'polar.fern', institution: '', github_url: '' },
+  { username: 'amber.creek', display_name: 'amber.creek', institution: '', github_url: '' },
 ];
 
 const ENVIRONMENTS = [
@@ -128,8 +132,8 @@ export async function POST() {
   try {
     // Prepared statements for seed
     const insertUser = db.prepare(`
-      INSERT OR IGNORE INTO users (username, display_name, github_url, institution, first_seen, last_active)
-      VALUES (@username, @display_name, @github_url, @institution, @first_seen, @last_active)
+      INSERT OR IGNORE INTO users (username, display_name, github_url, institution, is_seed, first_seen, last_active)
+      VALUES (@username, @display_name, @github_url, @institution, 1, @first_seen, @last_active)
     `);
 
     const getUserId = db.prepare(`SELECT id FROM users WHERE username = ?`);
@@ -166,24 +170,24 @@ export async function POST() {
       let globalBgcIndex = 0;
 
       for (const userData of USERS) {
-        const firstSeen = randomDateInLastDays(90);
+        const firstSeen = randomDateInLastDays(14);
 
         insertUser.run({
           ...userData,
           first_seen: firstSeen,
-          last_active: randomDateInLastDays(7),
+          last_active: randomDateInLastDays(3),
         });
         usersCreated++;
 
         const userRow = getUserId.get(userData.username) as { id: number };
         const userId = userRow.id;
 
-        // 2-5 runs per user
-        const numRuns = randomInt(2, 5);
+        // 1-3 runs per user (new project, low activity)
+        const numRuns = randomInt(1, 3);
 
         for (let r = 0; r < numRuns; r++) {
-          const runStarted = randomDateInLastDays(85);
-          const durationSec = randomInt(120, 7200);
+          const runStarted = randomDateInLastDays(14);
+          const durationSec = randomInt(300, 3600);
           const runCompleted = new Date(
             new Date(runStarted.replace(' ', 'T') + 'Z').getTime() + durationSec * 1000
           )
@@ -191,8 +195,8 @@ export async function POST() {
             .replace('T', ' ')
             .split('.')[0];
 
-          // 10-50 discoveries per run
-          const numDiscoveries = randomInt(10, 50);
+          // 3-12 discoveries per run (realistic for early stage)
+          const numDiscoveries = randomInt(3, 12);
 
           // Pick environment for this run
           const env = pick(ENVIRONMENTS);
@@ -317,6 +321,17 @@ export async function POST() {
   } catch (err) {
     console.error('[POST /api/seed]', err);
     const message = err instanceof Error ? err.message : 'Seed failed';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE() {
+  try {
+    clearAllData();
+    return NextResponse.json({ success: true, message: 'All data cleared' });
+  } catch (err) {
+    console.error('[DELETE /api/seed]', err);
+    const message = err instanceof Error ? err.message : 'Clear failed';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

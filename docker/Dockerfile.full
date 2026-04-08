@@ -1,0 +1,64 @@
+# DEEPMINE Distributed Mining Platform
+# Automated metagenomic BGC discovery pipeline container
+#
+# Design decisions:
+#   - mambaforge base: fast conda dependency resolution for bioinformatics packages
+#   - nice -n 19 entrypoint: lowest CPU scheduling priority (SETI@Home-style),
+#     so mining uses only idle cycles on volunteer machines
+#   - /data volume: persists the history DB across container restarts
+#   - antiSMASH --minimal: keeps image size manageable (~8 GB vs ~30 GB full DB)
+#   - Single mamba install layer: reduces image size vs multiple RUN commands
+#   - Structured RUN layers: ordered by change frequency for optimal Docker cache hits
+
+FROM condaforge/mambaforge:latest
+
+# System packages needed for building native extensions and runtime tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    procps curl ca-certificates build-essential tzdata && \
+    rm -rf /var/lib/apt/lists/*
+
+# Bioinformatics tools via conda (single layer for size)
+# These are large binary packages best installed through conda/mamba
+RUN mamba install -y -c bioconda -c conda-forge \
+    megahit \
+    prodigal \
+    seqkit \
+    sra-tools \
+    pigz \
+    hmmer \
+    && mamba clean --all -f -y
+
+# Python bioinformatics packages (BGC detection tools)
+# gecco-tool and deepbgc are pip-only packages
+RUN pip install --no-cache-dir \
+    gecco-tool>=0.9 \
+    deepbgc>=0.1.30
+
+# antiSMASH (separate layer because it's large and changes less often)
+# --minimal flag downloads only essential databases to keep image under 10 GB
+RUN pip install --no-cache-dir antismash && \
+    download-antismash-databases --minimal 2>/dev/null || true
+
+# Copy and install the DEEPMINE pipeline package
+WORKDIR /app
+COPY pipeline/ /app/pipeline/
+RUN pip install --no-cache-dir -e /app/pipeline/
+
+# Copy auto-mining orchestrator and default config
+COPY docker/auto.py /app/auto.py
+COPY docker/auto_config.yaml /app/config/auto_config.yaml
+
+# Create working directories for intermediate assembly files and results
+RUN mkdir -p /app/workdir /data/processed
+
+# Environment variables (overridable at runtime via docker run -e)
+ENV DEEPMINE_THREADS=4 \
+    DEEPMINE_DASHBOARD_URL=https://deepmine.computers.ch \
+    DEEPMINE_USERNAME=anonymous \
+    DEEPMINE_WORKDIR=/app/workdir
+
+# Data volume for persistent history DB across container restarts
+VOLUME ["/data"]
+
+# Run at lowest CPU priority so it uses only idle cycles on the host
+ENTRYPOINT ["nice", "-n", "19", "python", "/app/auto.py"]

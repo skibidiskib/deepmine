@@ -1,0 +1,118 @@
+# =============================================================================
+# DEEPMINE Auto-Mining Configuration
+# Sensible defaults for unattended SETI@Home-style distributed processing.
+# Override via environment variables in Docker or by editing this file.
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Compute resources
+# ---------------------------------------------------------------------------
+threads: 4                          # CPU threads for tools (DEEPMINE_THREADS)
+workdir: "/app/workdir"             # Scratch directory (DEEPMINE_WORKDIR)
+
+# ---------------------------------------------------------------------------
+# Community dashboard
+# ---------------------------------------------------------------------------
+dashboard_url: "http://localhost:6767"   # Dashboard endpoint (DEEPMINE_DASHBOARD_URL)
+username: "anonymous"                     # Contributor name (DEEPMINE_USERNAME)
+
+# ---------------------------------------------------------------------------
+# NCBI sample selection
+# ---------------------------------------------------------------------------
+sample_selection:
+  # Extreme environments to search for public metagenomes
+  environments:
+    - query: "cave metagenome"
+      label: "cave"
+    - query: "deep-sea vent metagenome"
+      label: "deep-sea vent"
+    - query: "hot spring metagenome"
+      label: "hot spring"
+    - query: "permafrost metagenome"
+      label: "permafrost"
+    - query: "hydrothermal vent metagenome"
+      label: "hydrothermal vent"
+    - query: "acid mine drainage metagenome"
+      label: "acid mine drainage"
+    - query: "marine sediment metagenome"
+      label: "marine sediment"
+
+  max_results_per_query: 500        # Max UIDs returned by NCBI esearch
+  max_retries: 10                   # Attempts to find an unprocessed sample
+  ncbi_delay_seconds: 0.4           # Minimum delay between NCBI API calls
+
+# ---------------------------------------------------------------------------
+# History tracking
+# ---------------------------------------------------------------------------
+history:
+  db_path: "/data/processed/history.db"
+
+# ---------------------------------------------------------------------------
+# Pipeline step timeouts (seconds)
+# ---------------------------------------------------------------------------
+timeouts:
+  download: 1800                    # 30 minutes
+  assembly: 3600                    # 60 minutes
+  compress: 1800                    # 30 minutes
+  filter_contigs: 1800              # 30 minutes
+  gene_calling: 1800                # 30 minutes
+  antismash: 1800                   # 30 minutes
+  gecco: 1800                       # 30 minutes
+  deepbgc: 1800                     # 30 minutes
+
+# ---------------------------------------------------------------------------
+# Assembly parameters
+# ---------------------------------------------------------------------------
+assembly:
+  megahit_preset: "meta-large"
+  min_contig_length: 5000           # bp; shorter contigs rarely hold full BGCs
+
+# ---------------------------------------------------------------------------
+# BGC detection
+# ---------------------------------------------------------------------------
+bgc_detection:
+  antismash_taxon: "bacteria"
+  antismash_mode: "--minimal"       # Fast mode for auto-mining throughput
+  gecco_threshold: 0.8
+  deepbgc_detector: "deepbgc"
+  min_consensus: 2                  # BGC must be found by at least 2 tools
+
+# ---------------------------------------------------------------------------
+# Scoring
+# ---------------------------------------------------------------------------
+scoring:
+  # Paths to check for a trained ML model (first match wins)
+  model_paths:
+    - "models/activity_scorer.pt"
+    - "/app/models/activity_scorer.pt"
+    - "/data/models/activity_scorer.pt"
+
+  # Heuristic scoring weights (used when no ML model is available)
+  heuristic:
+    detector_weight: 0.4            # Weight for number of detectors
+    confidence_weight: 0.4          # Weight for ensemble confidence
+    type_weight: 0.2                # Weight for BGC type bonus
+
+# ---------------------------------------------------------------------------
+# Cleanup
+# ---------------------------------------------------------------------------
+cleanup:
+  # Remove bulky intermediates after each sample to save disk
+  enabled: true
+  keep_files:
+    - "ranked_candidates.tsv"
+    - "summary.json"
+  remove_dirs:
+    - "reads"
+    - "assembly"
+    - "antismash"
+    - "gecco"
+    - "deepbgc"
+
+# ---------------------------------------------------------------------------
+# Loop behavior
+# ---------------------------------------------------------------------------
+loop:
+  no_sample_backoff_seconds: 60     # Wait time when no sample found
+  # Set to 0 for infinite loop; positive integer for fixed number of cycles
+  max_cycles: 0

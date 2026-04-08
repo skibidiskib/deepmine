@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserProfile } from '@/lib/db';
+import { getProgress } from '@/lib/progress';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(
   _request: NextRequest,
@@ -18,10 +21,20 @@ export async function GET(
     const profile = getUserProfile(username);
 
     if (!profile) {
-      return NextResponse.json(
-        { error: `User '${username}' not found` },
-        { status: 404 }
-      );
+      // Return placeholder for users who haven't submitted yet.
+      // Use progress data to derive first_seen if available.
+      const progress = getProgress(username);
+      return NextResponse.json({
+        username,
+        display_name: username,
+        total_runs: 0,
+        total_bgcs: 0,
+        total_novel: 0,
+        best_score: 0,
+        first_seen: progress?.updated_at?.replace('T', ' ').split('.')[0] || null,
+        runs: [],
+        discoveries: [],
+      });
     }
 
     return NextResponse.json(profile);

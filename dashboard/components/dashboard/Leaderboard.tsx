@@ -23,7 +23,7 @@ const RANK_BORDERS: Record<number, string> = {
 
 export default function Leaderboard({ className }: { className?: string }) {
   const { data, isLoading } = useSWR<LeaderboardEntry[]>(
-    '/api/leaderboard?limit=7',
+    '/api/leaderboard?limit=10',
     fetcher,
     { refreshInterval: 60000 },
   );
@@ -66,10 +66,7 @@ export default function Leaderboard({ className }: { className?: string }) {
 
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-white truncate">
-                    {user.display_name || user.username}
-                  </p>
-                  <p className="text-xs text-gray-500 truncate">
-                    {user.institution}
+                    {user.username}
                   </p>
                 </div>
 

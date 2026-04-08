@@ -1,0 +1,52 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { registerUser } from '@/lib/db';
+
+export const dynamic = 'force-dynamic';
+
+// Reserved usernames used by seed data
+const RESERVED = new Set([
+  'bright.cave', 'silent.reef', 'deep.spore', 'swift.ridge',
+  'bold.delta', 'calm.grove', 'vast.field', 'keen.shore',
+  'polar.fern', 'amber.creek',
+]);
+
+export async function POST(request: NextRequest) {
+  try {
+    const { username, pin } = await request.json();
+
+    if (!username || !/^[a-zA-Z0-9_.]{1,30}$/.test(username)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid username.' },
+        { status: 400 }
+      );
+    }
+
+    if (RESERVED.has(username)) {
+      return NextResponse.json(
+        { success: false, error: 'Username already taken.' },
+        { status: 409 }
+      );
+    }
+
+    if (!pin || !/^\d{6}$/.test(pin)) {
+      return NextResponse.json(
+        { success: false, error: 'PIN must be exactly 6 digits.' },
+        { status: 400 }
+      );
+    }
+
+    const result = registerUser(username, pin);
+
+    if (!result.success) {
+      return NextResponse.json(result, { status: 409 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error('[POST /api/auth/register]', err);
+    return NextResponse.json(
+      { success: false, error: 'Registration failed.' },
+      { status: 500 }
+    );
+  }
+}

@@ -10,11 +10,14 @@ import type {
   SubmitPayload,
 } from './types';
 
-// Ensure data directory exists
-const dataDir = join(process.cwd(), 'data');
+// Data directory: use DEEPMINE_DATA_DIR env var if set, otherwise fall back to ./data
+// On production, set DEEPMINE_DATA_DIR=/home/ubuntu/deepmine-data to keep DB outside app dir
+const dataDir = process.env.DEEPMINE_DATA_DIR || join(process.cwd(), 'data');
 mkdirSync(dataDir, { recursive: true });
 
-const db = new Database(join(dataDir, 'deepmine-dash.db'));
+const dbPath = join(dataDir, 'deepmine-dash.db');
+console.log(`[db] Opening database at: ${dbPath} (DEEPMINE_DATA_DIR=${process.env.DEEPMINE_DATA_DIR || 'not set'})`);
+const db = new Database(dbPath);
 
 // Performance pragmas
 db.pragma('journal_mode = WAL');
@@ -34,6 +37,7 @@ db.exec(`
     total_bgcs INTEGER NOT NULL DEFAULT 0,
     total_novel INTEGER NOT NULL DEFAULT 0,
     best_score REAL NOT NULL DEFAULT 0,
+    is_seed INTEGER NOT NULL DEFAULT 0,
     first_seen TEXT NOT NULL DEFAULT (datetime('now')),
     last_active TEXT NOT NULL DEFAULT (datetime('now'))
   );
@@ -79,6 +83,14 @@ db.exec(`
     collection_date TEXT NOT NULL DEFAULT '',
     organism TEXT NOT NULL DEFAULT ''
   );
+
+  CREATE TABLE IF NOT EXISTS global_processed (
+    accession TEXT PRIMARY KEY,
+    username TEXT NOT NULL,
+    bgcs_found INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'completed',
+    processed_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
 `);
 
 // ── Indexes ─────────────────────────────────────────────────────────────────
@@ -97,6 +109,92 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_sample_metadata_env ON sample_metadata(environment_type);
 `);
 
+// ── Migrations ─────────────────────────────────────────────────────────────
+
+try {
+  db.exec(`ALTER TABLE users ADD COLUMN is_seed INTEGER NOT NULL DEFAULT 0`);
+} catch { /* already exists */ }
+
+try {
+  db.exec(`ALTER TABLE users ADD COLUMN pin_hash TEXT NOT NULL DEFAULT ''`);
+} catch { /* already exists */ }
+
+try {
+  db.exec(`ALTER TABLE discoveries ADD COLUMN sequence TEXT NOT NULL DEFAULT ''`);
+} catch { /* already exists */ }
+
+try {
+  db.exec(`ALTER TABLE discoveries ADD COLUMN sequence_length INTEGER NOT NULL DEFAULT 0`);
+} catch { /* already exists */ }
+
+// ── Auth helpers ───────────────────────────────────────────────────────────
+
+function hashPin(pin: string): string {
+  const { createHash } = require('crypto');
+  return createHash('sha256').update(pin).digest('hex');
+}
+
+export function registerUser(username: string, pin: string): { success: boolean; error?: string } {
+  const existing = db.prepare(`SELECT id FROM users WHERE username = ?`).get(username);
+  if (existing) {
+    return { success: false, error: 'Username already taken.' };
+  }
+  db.prepare(
+    `INSERT INTO users (username, display_name, pin_hash) VALUES (?, ?, ?)`
+  ).run(username, username, hashPin(pin));
+  return { success: true };
+}
+
+export function verifyUser(username: string, pin: string): { success: boolean; error?: string } {
+  const user = db.prepare(`SELECT pin_hash FROM users WHERE username = ?`).get(username) as { pin_hash: string } | undefined;
+  if (!user) {
+    return { success: false, error: 'Username not found.' };
+  }
+  if (!user.pin_hash) {
+    return { success: false, error: 'Account has no PIN set. Submit results first to create your account.' };
+  }
+  if (user.pin_hash !== hashPin(pin)) {
+    return { success: false, error: 'Incorrect PIN.' };
+  }
+  return { success: true };
+}
+
+// ── Seed data helpers ──────────────────────────────────────────────────────
+
+export function hasSeedData(): boolean {
+  const row = db.prepare(`SELECT COUNT(*) AS cnt FROM users WHERE is_seed = 1`).get() as { cnt: number };
+  return row.cnt > 0;
+}
+
+export function clearSeedData(): void {
+  const clearTx = db.transaction(() => {
+    // Delete discoveries linked to seed users
+    db.exec(`DELETE FROM discoveries WHERE user_id IN (SELECT id FROM users WHERE is_seed = 1)`);
+    // Delete runs linked to seed users
+    db.exec(`DELETE FROM runs WHERE user_id IN (SELECT id FROM users WHERE is_seed = 1)`);
+    // Delete seed users
+    db.exec(`DELETE FROM users WHERE is_seed = 1`);
+    // Clean up orphaned sample_metadata (samples not referenced by any remaining discovery)
+    db.exec(`
+      DELETE FROM sample_metadata
+      WHERE sra_accession NOT IN (SELECT DISTINCT source_sample FROM discoveries)
+    `);
+  });
+  clearTx();
+}
+
+export function clearAllData(): void {
+  const clearTx = db.transaction(() => {
+    db.exec(`DELETE FROM discoveries`);
+    db.exec(`DELETE FROM runs`);
+    db.exec(`DELETE FROM users`);
+    db.exec(`DELETE FROM sample_metadata`);
+    // Reset autoincrement counters
+    db.exec(`DELETE FROM sqlite_sequence WHERE name IN ('discoveries', 'runs', 'users', 'sample_metadata')`);
+  });
+  clearTx();
+}
+
 // ── Prepared Statements ─────────────────────────────────────────────────────
 
 const stmtGlobalStats = db.prepare(`
@@ -105,11 +203,10 @@ const stmtGlobalStats = db.prepare(`
     COALESCE(SUM(u.total_novel), 0) AS total_novel,
     COUNT(*) AS total_users,
     (SELECT COUNT(DISTINCT environment_type) FROM sample_metadata WHERE environment_type != '') AS total_environments,
-    COALESCE(ROUND(AVG(d.activity_score), 4), 0) AS avg_score,
-    COALESCE(MAX(d.activity_score), 0) AS top_score,
+    COALESCE((SELECT ROUND(AVG(activity_score), 4) FROM discoveries), 0) AS avg_score,
+    COALESCE((SELECT MAX(activity_score) FROM discoveries), 0) AS top_score,
     COALESCE(SUM(u.total_runs), 0) AS total_runs
   FROM users u
-  LEFT JOIN discoveries d ON d.user_id = u.id
 `);
 
 const stmtLeaderboard = db.prepare(`
@@ -182,8 +279,8 @@ const stmtInsertRun = db.prepare(`
 `);
 
 const stmtInsertDiscovery = db.prepare(`
-  INSERT INTO discoveries (run_db_id, user_id, bgc_id, source_sample, bgc_type, predicted_product, novelty_distance, activity_score, confidence, bgc_length_bp, gene_count, detector_tools, discovered_at)
-  VALUES (@run_db_id, @user_id, @bgc_id, @source_sample, @bgc_type, @predicted_product, @novelty_distance, @activity_score, @confidence, @bgc_length_bp, @gene_count, @detector_tools, @discovered_at)
+  INSERT INTO discoveries (run_db_id, user_id, bgc_id, source_sample, bgc_type, predicted_product, novelty_distance, activity_score, confidence, bgc_length_bp, gene_count, detector_tools, sequence, sequence_length, discovered_at)
+  VALUES (@run_db_id, @user_id, @bgc_id, @source_sample, @bgc_type, @predicted_product, @novelty_distance, @activity_score, @confidence, @bgc_length_bp, @gene_count, @detector_tools, @sequence, @sequence_length, @discovered_at)
 `);
 
 const stmtUpsertSample = db.prepare(`
@@ -305,6 +402,7 @@ export function getUserProfile(username: string) {
       (max, d) => Math.max(max, d.activity_score),
       0
     ),
+    fully_novel: discoveries.filter((d) => d.novelty_distance >= 0.99).length,
     bgc_types: Object.entries(
       discoveries.reduce(
         (acc, d) => {
@@ -389,9 +487,11 @@ export const insertSubmission = db.transaction((payload: SubmitPayload) => {
       novelty_distance: c.novelty_distance,
       activity_score: c.activity_score,
       confidence: c.confidence,
-      bgc_length_bp: 0,
+      bgc_length_bp: c.sequence_length || 0,
       gene_count: 0,
       detector_tools: '[]',
+      sequence: c.sequence || '',
+      sequence_length: c.sequence_length || 0,
       discovered_at: now,
     });
   }
@@ -399,8 +499,79 @@ export const insertSubmission = db.transaction((payload: SubmitPayload) => {
   // 5. Refresh user aggregate stats
   stmtUpdateUserStats.run(userId, userId, userId, userId, userId);
 
+  // 6. Record in global processed samples
+  for (const sample of samples) {
+    stmtRecordProcessed.run({
+      accession: sample.sra_accession,
+      username,
+      bgcs_found: candidates.length,
+    });
+  }
+
   return { userId, runDbId, discoveriesCount: candidates.length };
 });
+
+// ── Global Processed Samples ──────────────────────────────────────────────
+
+const stmtRecordProcessed = db.prepare(`
+  INSERT INTO global_processed (accession, username, bgcs_found)
+  VALUES (@accession, @username, @bgcs_found)
+  ON CONFLICT(accession) DO UPDATE SET
+    bgcs_found = MAX(global_processed.bgcs_found, excluded.bgcs_found),
+    username = excluded.username,
+    processed_at = datetime('now')
+`);
+
+const stmtCheckProcessed = db.prepare(`
+  SELECT accession, username, bgcs_found, status FROM global_processed WHERE accession = ?
+`);
+
+const stmtGetProcessedList = db.prepare(`
+  SELECT accession FROM global_processed
+`);
+
+export function isGloballyProcessed(accession: string): boolean {
+  return !!stmtCheckProcessed.get(accession);
+}
+
+export function getProcessedAccessions(): string[] {
+  return (stmtGetProcessedList.all() as { accession: string }[]).map(r => r.accession);
+}
+
+export function recordProcessed(accession: string, username: string, bgcs_found: number) {
+  stmtRecordProcessed.run({ accession, username, bgcs_found });
+}
+
+// ── Public Export ──────────────────────────────────────────────────────────
+
+export function getAllDiscoveriesWithSequences() {
+  return db.prepare(`
+    SELECT
+      d.bgc_id, d.source_sample, d.bgc_type, d.predicted_product,
+      d.novelty_distance, d.activity_score, d.confidence,
+      d.sequence, d.sequence_length, d.discovered_at,
+      u.username,
+      sm.environment_type, sm.location_name
+    FROM discoveries d
+    JOIN users u ON u.id = d.user_id
+    LEFT JOIN sample_metadata sm ON sm.sra_accession = d.source_sample
+    WHERE u.is_seed = 0
+    ORDER BY d.activity_score DESC
+  `).all();
+}
+
+export function getDiscoveryStats() {
+  return db.prepare(`
+    SELECT
+      COUNT(*) as total_discoveries,
+      COUNT(CASE WHEN sequence != '' THEN 1 END) as with_sequences,
+      COUNT(DISTINCT source_sample) as unique_samples,
+      COUNT(DISTINCT user_id) as unique_contributors
+    FROM discoveries d
+    JOIN users u ON u.id = d.user_id
+    WHERE u.is_seed = 0
+  `).get();
+}
 
 // ── SSE Emitter ─────────────────────────────────────────────────────────────
 
