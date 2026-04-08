@@ -1,6 +1,6 @@
 {
   "name": "deepmine",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Mine Earth's microbiome for new antibiotics. SETI@Home-style distributed computing for antibiotic discovery via Docker.",
   "keywords": [
     "antibiotics",

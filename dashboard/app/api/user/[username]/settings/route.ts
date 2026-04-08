@@ -1,17 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getUserSettings, saveUserSettings } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
-
-// In-memory settings store (persists until server restart)
-const settingsMap = new Map<string, {
-  speed: string;
-  mode: string;
-  bandwidth: string;
-  schedule_start: number;
-  schedule_end: number;
-  download_start: number;
-  download_end: number;
-}>();
 
 const DEFAULTS = {
   speed: 'medium',
@@ -28,7 +18,7 @@ export async function GET(
   { params }: { params: Promise<{ username: string }> }
 ) {
   const { username } = await params;
-  const settings = settingsMap.get(username) || { ...DEFAULTS };
+  const settings = getUserSettings(username);
   return NextResponse.json(settings);
 }
 
@@ -59,7 +49,7 @@ export async function POST(
     const download_end = clampHour(body.download_end, DEFAULTS.download_end);
 
     const settings = { speed, mode, bandwidth, schedule_start, schedule_end, download_start, download_end };
-    settingsMap.set(username, settings);
+    saveUserSettings(username, settings);
 
     return NextResponse.json({ success: true, ...settings });
   } catch (err) {

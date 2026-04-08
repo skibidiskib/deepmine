@@ -38,9 +38,18 @@ const NOUNS = [
 
 // Reserved usernames (seed data) that cannot be assigned
 const RESERVED_USERNAMES = new Set([
+  // Original seed usernames
   'bright.cave', 'silent.reef', 'deep.spore', 'swift.ridge',
   'bold.delta', 'calm.grove', 'vast.field', 'keen.shore',
   'polar.fern', 'amber.creek',
+  // Community volunteers
+  'bright.glacier', 'silent.reef', 'cosmic.tide', 'frozen.peak',
+  'deep.current', 'amber.ridge', 'crystal.bay', 'iron.marsh',
+  'swift.canyon', 'jade.lagoon', 'solar.drift', 'storm.hollow',
+  'coral.mesa', 'ember.brook', 'arctic.sage', 'lunar.vale',
+  'misty.cove', 'onyx.shore', 'wild.spring', 'echo.field',
+  // System
+  'anonymous', 'admin', 'system', 'deepmine',
 ]);
 
 function generateUsername() {
@@ -312,9 +321,18 @@ async function commandStart() {
         process.exit(1);
       }
     } else {
-      // New user: generate a username
+      // New user: generate a username (check reserved + existing on dashboard)
+      const isNameTaken = async (name) => {
+        if (RESERVED_USERNAMES.has(name)) return true;
+        try {
+          const res = await fetch(`${dashboardUrl}/api/user/${name}`);
+          const data = await res.json();
+          return data.user && data.user.total_runs > 0;
+        } catch { return false; }
+      };
+
       username = generateUsername();
-      while (RESERVED_USERNAMES.has(username)) {
+      while (await isNameTaken(username)) {
         username = generateUsername();
       }
 
@@ -322,7 +340,7 @@ async function commandStart() {
       let reroll = await prompt(rl, '  Press ENTER to keep, or R to re-roll: ');
       while (reroll.toLowerCase() === 'r') {
         username = generateUsername();
-        while (RESERVED_USERNAMES.has(username)) {
+        while (await isNameTaken(username)) {
           username = generateUsername();
         }
         console.log(`\n  Your username: ${username}\n`);

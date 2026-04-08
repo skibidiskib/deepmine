@@ -91,6 +91,18 @@ db.exec(`
     status TEXT NOT NULL DEFAULT 'completed',
     processed_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS user_settings (
+    username TEXT PRIMARY KEY,
+    speed TEXT NOT NULL DEFAULT 'medium',
+    mode TEXT NOT NULL DEFAULT 'always',
+    bandwidth TEXT NOT NULL DEFAULT '5mb',
+    schedule_start INTEGER NOT NULL DEFAULT 8,
+    schedule_end INTEGER NOT NULL DEFAULT 22,
+    download_start INTEGER NOT NULL DEFAULT 22,
+    download_end INTEGER NOT NULL DEFAULT 6,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
 `);
 
 // ── Indexes ─────────────────────────────────────────────────────────────────
@@ -571,6 +583,64 @@ export function getDiscoveryStats() {
     JOIN users u ON u.id = d.user_id
     WHERE u.is_seed = 0
   `).get();
+}
+
+// ── User Settings ─────────────────────────────────────────────────────────
+
+export interface UserSettings {
+  speed: string;
+  mode: string;
+  bandwidth: string;
+  schedule_start: number;
+  schedule_end: number;
+  download_start: number;
+  download_end: number;
+}
+
+const USER_SETTINGS_DEFAULTS: UserSettings = {
+  speed: 'medium',
+  mode: 'always',
+  bandwidth: '5mb',
+  schedule_start: 8,
+  schedule_end: 22,
+  download_start: 22,
+  download_end: 6,
+};
+
+const stmtGetUserSettings = db.prepare(
+  `SELECT speed, mode, bandwidth, schedule_start, schedule_end, download_start, download_end FROM user_settings WHERE username = ?`
+);
+
+const stmtUpsertUserSettings = db.prepare(`
+  INSERT INTO user_settings (username, speed, mode, bandwidth, schedule_start, schedule_end, download_start, download_end, updated_at)
+  VALUES (@username, @speed, @mode, @bandwidth, @schedule_start, @schedule_end, @download_start, @download_end, datetime('now'))
+  ON CONFLICT(username) DO UPDATE SET
+    speed = @speed,
+    mode = @mode,
+    bandwidth = @bandwidth,
+    schedule_start = @schedule_start,
+    schedule_end = @schedule_end,
+    download_start = @download_start,
+    download_end = @download_end,
+    updated_at = datetime('now')
+`);
+
+export function getUserSettings(username: string): UserSettings {
+  const row = stmtGetUserSettings.get(username) as UserSettings | undefined;
+  return row || { ...USER_SETTINGS_DEFAULTS };
+}
+
+export function saveUserSettings(username: string, settings: UserSettings): void {
+  stmtUpsertUserSettings.run({
+    username,
+    speed: settings.speed,
+    mode: settings.mode,
+    bandwidth: settings.bandwidth,
+    schedule_start: settings.schedule_start,
+    schedule_end: settings.schedule_end,
+    download_start: settings.download_start,
+    download_end: settings.download_end,
+  });
 }
 
 // ── SSE Emitter ─────────────────────────────────────────────────────────────
