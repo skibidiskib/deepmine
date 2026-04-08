@@ -1,157 +1,166 @@
 # DEEPMINE
 
-**Mine Earth's microbiome for new antibiotics.**
+**Distributed discovery of new antibiotics from environmental DNA.**
 
-DEEPMINE is an open-source platform for discovering novel antimicrobial compounds from metagenomic data. It combines a computational pipeline that finds biosynthetic gene clusters (BGCs) in environmental DNA with a live community dashboard that tracks discoveries across all contributors.
+DEEPMINE is a SETI@Home-style platform where volunteers donate idle CPU time to screen public metagenomes for novel biosynthetic gene clusters (BGCs). Results are reported to a community dashboard and submitted to NCBI GenBank under BioProject [PRJNA1449212](https://www.ncbi.nlm.nih.gov/bioproject/PRJNA1449212).
 
-99% of environmental bacteria cannot be cultured in a lab, but their DNA is publicly available in sequencing databases. DEEPMINE screens this "genomic dark matter" for gene clusters that may produce new antibiotics.
+99% of environmental bacteria cannot be cultured in a lab, but their DNA is publicly available. DEEPMINE mines this genomic dark matter for gene clusters that may produce new antibiotics.
+
+**Dashboard:** [deepmine.computers.ch](https://deepmine.computers.ch)
 
 ## Quick start
 
-### Community Dashboard (no Python needed)
-
 ```bash
-npx deepmine
+npm install -g deepmine
+deepmine
 ```
 
-Opens the live dashboard at `http://localhost:6767`. Tracks BGC discoveries, contributor leaderboard, activity scores, and novelty rates in real-time.
+That's it. The setup wizard generates a username, picks a Docker tier, and starts mining. Results appear on the dashboard automatically.
 
 ```bash
-npx deepmine seed     # Load demo data to see the dashboard in action
-npx deepmine status   # Check dashboard stats
-```
-
-### Analysis Pipeline (find new antibiotics)
-
-```bash
-# Install Python pipeline
-cd pipeline
-pip install -e .
-
-# Install bioinformatics tools
-conda install -c bioconda megahit prodigal antismash gecco deepbgc seqkit sra-tools
-
-# Download a cave metagenome and run
-deepmine fetch --sra SRR8859675
-deepmine run -j 8
-
-# Report discoveries to the community dashboard
-deepmine report results/ --url http://localhost:6767 --username your_name
+deepmine status    # Show pipeline progress and stats
+deepmine stop      # Stop mining (contributions are saved)
+deepmine update    # Pull latest image and restart
+deepmine logs      # Stream pipeline output
 ```
 
 ## How it works
 
 ```
-Public metagenomic data (NCBI SRA, MGnify)
-  |
-  v
-Assembly (MEGAHIT) -- reconstruct contigs from short reads
-  |
-  v
-Gene calling (Prodigal) -- predict protein-coding genes
-  |
-  v
-BGC detection (antiSMASH + GECCO + DeepBGC ensemble)
-  |  -- three tools vote, consensus filtering reduces false positives
-  v
-Novelty filtering (BiG-SLiCE) -- keep only BGCs distant from known families
-  |
-  v
-Activity scoring (transformer-based ML model)
-  |  -- predicts antimicrobial activity from domain architecture
-  v
-Ranked candidates --> report to community dashboard
+Volunteer's machine                        Community dashboard
+-------------------                        -------------------
+
+npx deepmine                               deepmine.computers.ch
+  |                                              |
+  v                                              |
+Docker container starts                          |
+  |                                              |
+  v                                              |
+Fetch settings (speed, schedule, bandwidth) <----+
+  |                                              |
+  v                                              |
+Check global processed list <------- GET /api/samples/processed
+  |                                              |
+  v                                              |
+Pick unprocessed sample (curated first, then NCBI search)
+  |                                              |
+  v                                              |
+Pipeline:                                        |
+  1. Download reads from NCBI SRA                |
+  2. Compress (pigz)                             |
+  3. Assemble contigs (MEGAHIT)                  |
+  4. Filter contigs >= 2kb (seqkit)              |
+  5. Gene calling (Prodigal)                     |
+  6. BGC detection (GECCO, antiSMASH*, DeepBGC*) |
+  7. Ensemble merge + consensus voting           |
+  8. Score candidates (heuristic or ML)          |
+  9. Extract BGC sequences from contigs          |
+  |                                              |
+  v                                              |
+Report progress every 30s --------> POST /api/user/{me}/progress
+  |                                              |
+  v                                              |
+Submit results + sequences -------> POST /api/submit
+Mark sample globally processed ---> POST /api/samples/processed
+  |                                              |
+  v                                              v
+Clean up, pick next sample           Dashboard updates in real-time
+                                     Discoveries available at /discoveries
+                                     FASTA/CSV/JSON download at /api/export
 ```
 
-### The novel contribution
+*antiSMASH and DeepBGC available in standard/full tiers only
 
-The activity scorer uses a **transformer-based BGC encoder** that learns from the ordered sequence of protein domains in a gene cluster. Unlike prior approaches that use flat feature vectors, it captures long-range domain-domain interactions via self-attention, similar to how a chemist reads an enzymatic assembly line.
+## Docker tiers
+
+| Tier | Image size | Tools | Best for |
+|------|-----------|-------|----------|
+| **lite** | ~2 GB | GECCO only | Volunteers donating idle CPU |
+| **standard** | ~5 GB | antiSMASH + GECCO + DeepBGC | Better accuracy, 3-tool consensus |
+| **full** | ~12 GB | All tools + PyTorch ML scorer | Maximum sensitivity + ML scoring |
+
+## User settings
+
+Settings are configured on the dashboard profile page and read by the container each cycle:
+
+- **Speed:** Low (25% CPU) / Medium (50%) / High (75%) / Maximum (100%)
+- **Bandwidth:** 512 KB/s / 1 MB/s / 2 MB/s / 5 MB/s / 10 MB/s / Unlimited
+- **Schedule:** 24/7, custom hours (e.g. 22:00-08:00), or queue mode (download at night, process by day)
+
+## Global dedup
+
+Every processed sample (even 0 BGCs) is reported to the dashboard. Before starting a new sample, containers fetch the global processed list so no two volunteers scan the same sample.
+
+## Public discoveries
+
+All BGC discoveries are publicly available at [deepmine.computers.ch/discoveries](https://deepmine.computers.ch/discoveries):
+
+- **FASTA download** with nucleotide sequences for all BGCs
+- **CSV download** with metadata (type, scores, environment, contributor)
+- **JSON API** for programmatic access
+
+Results are submitted to NCBI GenBank under BioProject PRJNA1449212.
 
 ## Project structure
 
 ```
 deepmine/
-  bin/cli.js           # npx deepmine CLI
-  dashboard/           # Next.js community dashboard (port 6767)
-  pipeline/            # Python analysis pipeline
-    deepmine/          # Python package
-      models/          # Transformer BGC encoder + activity scorer
-      parsers/         # antiSMASH, GECCO, DeepBGC output parsers
-      features/        # BGC feature extraction
-      telemetry.py     # Report results to dashboard
-      cli.py           # deepmine CLI (run, score, train, fetch, report)
-    workflow/          # Snakemake pipeline rules
-    config/            # Pipeline configuration
-    tests/             # Unit tests
+  bin/cli.js              # npm CLI (setup wizard, Docker orchestration)
+  dashboard/              # Next.js community dashboard
+    app/
+      api/
+        submit/           # Receive pipeline results
+        export/           # Public FASTA/CSV/JSON download
+        samples/processed # Global dedup registry
+        user/[username]/
+          progress/       # Live pipeline progress
+          settings/       # Mining preferences
+      discoveries/        # Public discoveries page
+    lib/
+      db.ts               # SQLite schema + queries
+      progress.ts         # In-memory progress tracking
+  docker/
+    auto.py               # Auto-mining loop (runs inside container)
+    Dockerfile.lite       # GECCO only (~2 GB)
+    Dockerfile.standard   # 3-tool ensemble (~5 GB)
+    Dockerfile.full       # All tools + ML (~12 GB)
+  pipeline/               # Python BGC detection pipeline
+    deepmine/
+      parsers/            # antiSMASH, GECCO, DeepBGC output parsers
+      models/             # ML activity scorer
+  deploy-dashboard.sh     # Safe deploy script with backup
 ```
 
-## Dashboard
+## Curated samples
 
-The community dashboard is a dark-themed glassmorphism web app built with Next.js, Tailwind CSS, Framer Motion, and Recharts. It shows:
+The pipeline starts with 20 curated metagenome accessions from extreme environments known to harbor novel chemistry:
 
-- **Global stats**: total BGCs, novel candidates, contributors, environments explored
-- **Discovery timeline**: cumulative BGC discoveries over time
-- **Leaderboard**: top contributors ranked by discoveries
-- **BGC type distribution**: NRPS, PKS, RiPP, terpene, hybrid breakdown
-- **Activity score histogram**: distribution of predicted antimicrobial scores
-- **Novelty gauge**: percentage of BGCs that are novel
-- **Live feed**: real-time SSE-powered discovery stream
+- Lechuguilla Cave, New Mexico (487m deep, 4 million years isolated)
+- Yellowstone hot springs (72-83C)
+- Juan de Fuca Ridge hydrothermal vents (2200m depth)
+- Guaymas Basin marine sediments (2000m)
+- Iron Mountain acid mine drainage (pH 0.5)
+- Stordalen Mire Arctic permafrost
+- McMurdo Dry Valleys Antarctic soil
+- Sundarbans mangrove forests
 
-Data is stored in SQLite. The dashboard receives results via a REST API (`POST /api/submit`) from the pipeline's `deepmine report` command.
+After curated samples are exhausted, the pipeline searches NCBI SRA for random WGS metagenomes.
 
-## Pipeline commands
+## Infrastructure
 
-```bash
-deepmine run -c config/config.yaml -j 8    # Run full pipeline
-deepmine run --dry-run                      # Preview what would execute
-deepmine score /path/to/bgcs/ -m model.pt  # Score pre-extracted BGCs
-deepmine train --mibig-dir data/mibig/     # Train the activity scorer
-deepmine fetch --sra SRR12345678           # Download metagenomic data
-deepmine report results/ --url URL         # Report to dashboard
-```
-
-## Where to find data
-
-The pipeline works on public metagenomic data from environments where novel chemistry is most likely:
-
-| Environment | Why interesting | How to find |
-|-------------|----------------|-------------|
-| Caves | Isolated for millions of years | Search SRA: "cave metagenome" |
-| Deep-sea vents | Extreme pressure, unique metabolisms | Search: "hydrothermal vent metagenome" |
-| Hot springs | Thermophilic organisms | Search: "hot spring metagenome" |
-| Permafrost | Ancient organisms preserved in ice | Search: "permafrost metagenome" |
-| Acid mine drainage | Metal-resistant organisms | Search: "acid mine metagenome" |
-| Insect microbiomes | Co-evolved defensive chemistry | Search: "insect symbiont metagenome" |
-
-Browse datasets at [NCBI SRA](https://www.ncbi.nlm.nih.gov/sra) or [MGnify](https://www.ebi.ac.uk/metagenomics).
-
-## What to do with results
-
-High-scoring, high-novelty BGC candidates from the ranked output can be:
-
-1. **Published openly** on GitHub/Zenodo for labs to validate
-2. **Submitted to [CO-ADD](https://www.co-add.org/)** for free antimicrobial testing
-3. **Shared with the community** via the DEEPMINE dashboard
-4. **Written up as a preprint** documenting the computational findings
-
-## Requirements
-
-**Dashboard only** (viewers, hosts):
-- Node.js >= 18
-
-**Pipeline** (researchers running analyses):
-- Python >= 3.10
-- conda (for bioinformatics tools)
-- 16+ GB RAM recommended
-- GPU optional (speeds up ML scoring)
+- **Dashboard:** Oracle Cloud (.147), PM2, nginx, Let's Encrypt SSL
+- **Docker images:** Docker Hub (`skibidiskib/deepmine-miner:{lite,standard,full}`)
+- **npm package:** [deepmine](https://www.npmjs.com/package/deepmine)
+- **NCBI BioProject:** [PRJNA1449212](https://www.ncbi.nlm.nih.gov/bioproject/PRJNA1449212)
+- **Database backups:** Daily at 3 AM UTC, 30-day retention
 
 ## Contributing
 
-Contributions welcome. Key areas:
+Contributions welcome:
 
-- Expanding the training dataset beyond MIBiG
-- Adding more BGC detection backends
-- Improving structure prediction from domain architecture
+- Run the miner: `npm install -g deepmine && deepmine`
+- Improve BGC detection accuracy
+- Add new environment-specific sample lists
 - Wet-lab validation of computational predictions
 - Dashboard features and visualizations
 

@@ -212,7 +212,7 @@ export default function Header() {
           <Download className="w-4 h-4" />
         </a>
         <a
-          href="https://github.com/deepmine"
+          href="https://github.com/skibidiskib/deepmine"
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors text-sm"
