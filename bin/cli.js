@@ -325,7 +325,7 @@ async function commandStart() {
       const isNameTaken = async (name) => {
         if (RESERVED_USERNAMES.has(name)) return true;
         try {
-          const res = await fetch(`${dashboardUrl}/api/user/${name}`);
+          const res = await fetch(`${DEFAULT_DASHBOARD_URL}/api/user/${name}`);
           const data = await res.json();
           return data.user && data.user.total_runs > 0;
         } catch { return false; }

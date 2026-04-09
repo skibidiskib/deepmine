@@ -6,9 +6,18 @@ export const dynamic = 'force-dynamic';
 
 // Reserved usernames used by seed data
 const RESERVED = new Set([
+  // Original seed usernames
   'bright.cave', 'silent.reef', 'deep.spore', 'swift.ridge',
   'bold.delta', 'calm.grove', 'vast.field', 'keen.shore',
   'polar.fern', 'amber.creek',
+  // Community volunteers
+  'bright.glacier', 'silent.reef', 'cosmic.tide', 'frozen.peak',
+  'deep.current', 'amber.ridge', 'crystal.bay', 'iron.marsh',
+  'swift.canyon', 'jade.lagoon', 'solar.drift', 'storm.hollow',
+  'coral.mesa', 'ember.brook', 'arctic.sage', 'lunar.vale',
+  'misty.cove', 'onyx.shore', 'wild.spring', 'echo.field',
+  // System
+  'anonymous', 'admin', 'system', 'deepmine',
 ]);
 
 export async function POST(request: NextRequest) {
