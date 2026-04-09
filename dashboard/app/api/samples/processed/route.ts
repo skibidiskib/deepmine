@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getProcessedAccessions, recordProcessed } from '@/lib/db';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,6 +30,10 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+
+    if (!checkRateLimit(body.username || 'anon')) {
+      return NextResponse.json({ error: 'Rate limited' }, { status: 429 });
+    }
 
     if (!body.accession || !body.username) {
       return NextResponse.json(

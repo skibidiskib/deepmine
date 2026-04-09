@@ -14,6 +14,10 @@ function sanitizeFilename(name: string): string {
   return name.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
 }
 
+function sanitizeField(value: string): string {
+  return value.replace(/[\n\r|>"<]/g, '_').slice(0, 200);
+}
+
 const REPO_DIR = '/home/ubuntu/deepmine-discoveries';
 const SEQUENCES_DIR = join(REPO_DIR, 'sequences');
 const DATA_DIR = join(REPO_DIR, 'data');
@@ -98,7 +102,7 @@ export function pushDiscoveriesToGitHub(entries: BGCEntry[]): boolean {
     const allFastaPath = join(DATA_DIR, 'all_discoveries.fasta');
     let allFasta = '';
     for (const entry of withSequences) {
-      const header = `>${entry.bgc_id}|${entry.source_sample}|${entry.bgc_type}|score=${entry.activity_score}|${entry.environment}|by=${entry.username}`;
+      const header = `>${sanitizeField(entry.bgc_id)}|${sanitizeField(entry.source_sample)}|${sanitizeField(entry.bgc_type)}|score=${entry.activity_score}|${sanitizeField(entry.environment || '')}|by=${sanitizeField(entry.username)}`;
       allFasta += header + '\n';
       for (let i = 0; i < entry.sequence.length; i += 80) {
         allFasta += entry.sequence.slice(i, i + 80) + '\n';

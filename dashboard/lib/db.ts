@@ -141,9 +141,22 @@ try {
 
 // ── Auth helpers ───────────────────────────────────────────────────────────
 
-function hashPin(pin: string): string {
-  const { createHash } = require('crypto');
-  return createHash('sha256').update(pin).digest('hex');
+function hashPin(pin: string, salt?: string): string {
+  const { randomBytes, scryptSync } = require('crypto');
+  const s = salt || randomBytes(16).toString('hex');
+  const hash = scryptSync(pin, s, 64).toString('hex');
+  return `${s}:${hash}`;
+}
+
+function verifyPin(pin: string, stored: string): boolean {
+  if (!stored.includes(':')) {
+    // Legacy unsalted SHA-256 hash: migrate on verify
+    const { createHash } = require('crypto');
+    return createHash('sha256').update(pin).digest('hex') === stored;
+  }
+  const [salt, hash] = stored.split(':');
+  const { scryptSync } = require('crypto');
+  return scryptSync(pin, salt, 64).toString('hex') === hash;
 }
 
 export function registerUser(username: string, pin: string): { success: boolean; error?: string } {
@@ -165,8 +178,12 @@ export function verifyUser(username: string, pin: string): { success: boolean; e
   if (!user.pin_hash) {
     return { success: false, error: 'Account has no PIN set. Submit results first to create your account.' };
   }
-  if (user.pin_hash !== hashPin(pin)) {
+  if (!verifyPin(pin, user.pin_hash)) {
     return { success: false, error: 'Incorrect PIN.' };
+  }
+  // Migrate legacy unsalted hash to scrypt on successful login
+  if (!user.pin_hash.includes(':')) {
+    db.prepare('UPDATE users SET pin_hash = ? WHERE username = ?').run(hashPin(pin), username);
   }
   return { success: true };
 }
