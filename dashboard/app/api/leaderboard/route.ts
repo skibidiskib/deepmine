@@ -11,7 +11,9 @@ export async function GET(request: NextRequest) {
       100
     );
 
-    const leaderboard = getLeaderboard(limit);
+    const leaderboard = getLeaderboard(limit).map(
+      ({ pin_hash, ...rest }: any) => rest
+    );
 
     return NextResponse.json(leaderboard);
   } catch (err) {

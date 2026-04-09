@@ -37,7 +37,9 @@ export async function GET(
       });
     }
 
-    return NextResponse.json(profile);
+    // Strip pin_hash from user object before sending
+    const { pin_hash, ...safeUser } = (profile.user || {}) as any;
+    return NextResponse.json({ ...profile, user: safeUser });
   } catch (err) {
     console.error('[GET /api/user/[username]]', err);
     return NextResponse.json(
