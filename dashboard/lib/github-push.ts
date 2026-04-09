@@ -55,13 +55,13 @@ export function pushDiscoveriesToGitHub(entries: BGCEntry[]): boolean {
     for (const entry of withSequences) {
       const filename = `${today}_${sanitizeFilename(entry.bgc_id)}.fasta`;
       const header = [
-        entry.bgc_id,
-        entry.source_sample,
-        entry.bgc_type,
+        sanitizeField(entry.bgc_id),
+        sanitizeField(entry.source_sample),
+        sanitizeField(entry.bgc_type),
         `score=${entry.activity_score}`,
         `novelty=${entry.novelty_distance}`,
-        entry.environment || 'unknown',
-        `by=${entry.username}`,
+        sanitizeField(entry.environment || 'unknown'),
+        `by=${sanitizeField(entry.username)}`,
       ].join('|');
 
       let fasta = `>${header}\n`;
