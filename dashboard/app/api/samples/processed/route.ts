@@ -3,6 +3,9 @@ import { getProcessedAccessions, recordProcessed } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
+// SRA accession format: SRR/ERR/DRR followed by 6-12 digits
+const ACCESSION_RE = /^[A-Z]{3}\d{6,12}$/;
+
 /**
  * GET /api/samples/processed
  * Returns list of all globally processed accessions so containers
@@ -30,6 +33,14 @@ export async function POST(request: NextRequest) {
     if (!body.accession || !body.username) {
       return NextResponse.json(
         { error: 'Missing required fields: accession, username' },
+        { status: 400 }
+      );
+    }
+
+    // Validate accession format (SRR/ERR/DRR + 6-12 digits)
+    if (!ACCESSION_RE.test(body.accession)) {
+      return NextResponse.json(
+        { error: 'Invalid accession format. Expected SRR/ERR/DRR followed by 6-12 digits.' },
         { status: 400 }
       );
     }

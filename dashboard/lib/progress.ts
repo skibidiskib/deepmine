@@ -104,6 +104,9 @@ export function updateProgress(update: ProgressUpdate): UserProgress {
         completed_at: existing.updated_at,
       },
     ];
+
+    // Cap to last 100 entries to prevent unbounded memory growth
+    sessionSamples = sessionSamples.slice(-100);
   }
 
   const stepIndex = PIPELINE_STEPS.findIndex((s) => s.key === update.step);

@@ -9,6 +9,8 @@ export const dynamic = 'force-dynamic';
 
 const USERNAME_RE = /^[a-zA-Z0-9_.\-]{1,40}$/;
 const MAX_CANDIDATES = 1000;
+const MAX_SEQUENCE_LENGTH = 200_000; // 200kb
+const MAX_SAMPLES = 10;
 
 function isScoreValid(v: unknown): boolean {
   return typeof v === 'number' && v >= 0 && v <= 1;
@@ -67,10 +69,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Cap samples array size
+    if (body.samples.length > MAX_SAMPLES) {
+      body.samples = body.samples.slice(0, MAX_SAMPLES);
+    }
+
     // Normalize candidate scores - default missing values to 0, clamp to [0,1]
+    // Truncate oversized sequences
     for (const c of body.candidates) {
       c.activity_score = Math.max(0, Math.min(1, Number(c.activity_score) || 0));
       c.confidence = Math.max(0, Math.min(1, Number(c.confidence) || 0));
+      if (c.sequence && c.sequence.length > MAX_SEQUENCE_LENGTH) {
+        c.sequence = c.sequence.slice(0, MAX_SEQUENCE_LENGTH);
+      }
     }
 
     // Server-side novelty scoring: BLAST against MIBiG 2,502 known BGCs

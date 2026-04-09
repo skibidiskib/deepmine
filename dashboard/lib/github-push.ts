@@ -5,9 +5,14 @@
  * and updates the CSV, then pushes to skibidiskib/deepmine-discoveries.
  */
 
-import { execSync } from 'child_process';
+import { execSync, spawnSync } from 'child_process';
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
+
+/** Sanitize a string for use as a filename: keep only safe characters. */
+function sanitizeFilename(name: string): string {
+  return name.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
+}
 
 const REPO_DIR = '/home/ubuntu/deepmine-discoveries';
 const SEQUENCES_DIR = join(REPO_DIR, 'sequences');
@@ -44,7 +49,7 @@ export function pushDiscoveriesToGitHub(entries: BGCEntry[]): boolean {
 
     // Write individual FASTA files
     for (const entry of withSequences) {
-      const filename = `${today}_${entry.bgc_id}.fasta`;
+      const filename = `${today}_${sanitizeFilename(entry.bgc_id)}.fasta`;
       const header = [
         entry.bgc_id,
         entry.source_sample,
@@ -107,7 +112,7 @@ export function pushDiscoveriesToGitHub(entries: BGCEntry[]): boolean {
 
     const commitMsg = `Add ${withSequences.length} BGC${withSequences.length > 1 ? 's' : ''} from ${withSequences[0].source_sample} (${withSequences[0].environment || 'unknown'})`;
     try {
-      execSync(`git commit -m "${commitMsg}"`, gitOpts);
+      spawnSync('git', ['commit', '-m', commitMsg], gitOpts);
       execSync('git push origin main', gitOpts);
       console.log(`[github] Pushed ${withSequences.length} discoveries to GitHub`);
       return true;

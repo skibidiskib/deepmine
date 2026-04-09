@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { registerUser } from '@/lib/db';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +13,15 @@ const RESERVED = new Set([
 
 export async function POST(request: NextRequest) {
   try {
+    // Rate limit by IP to prevent mass account creation
+    const ip = request.headers.get('x-forwarded-for') || 'unknown';
+    if (!checkRateLimit(`auth:register:${ip}`)) {
+      return NextResponse.json(
+        { success: false, error: 'Too many registration attempts. Try again in a minute.' },
+        { status: 429 }
+      );
+    }
+
     const { username, pin } = await request.json();
 
     if (!username || !/^[a-zA-Z0-9_.]{1,30}$/.test(username)) {

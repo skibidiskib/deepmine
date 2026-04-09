@@ -246,7 +246,10 @@ const stmtDiscoveriesCount = db.prepare(`
 
 const stmtDiscoveriesPage = db.prepare(`
   SELECT
-    d.*,
+    d.id, d.run_db_id, d.user_id, d.bgc_id, d.source_sample,
+    d.bgc_type, d.predicted_product, d.novelty_distance,
+    d.activity_score, d.confidence, d.bgc_length_bp, d.gene_count,
+    d.detector_tools, d.sequence_length, d.discovered_at,
     u.username,
     u.display_name,
     u.institution
