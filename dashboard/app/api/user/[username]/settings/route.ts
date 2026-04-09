@@ -7,6 +7,7 @@ const DEFAULTS = {
   speed: 'medium',
   mode: 'always',
   bandwidth: '5mb',
+  timezone: 'UTC',
   schedule_start: 8,
   schedule_end: 22,
   download_start: 22,
@@ -48,7 +49,8 @@ export async function POST(
     const download_start = clampHour(body.download_start, DEFAULTS.download_start);
     const download_end = clampHour(body.download_end, DEFAULTS.download_end);
 
-    const settings = { speed, mode, bandwidth, schedule_start, schedule_end, download_start, download_end };
+    const timezone = typeof body.timezone === 'string' && body.timezone.length <= 50 ? body.timezone : 'UTC';
+    const settings = { speed, mode, bandwidth, timezone, schedule_start, schedule_end, download_start, download_end };
     saveUserSettings(username, settings);
 
     return NextResponse.json({ success: true, ...settings });

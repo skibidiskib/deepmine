@@ -77,7 +77,7 @@ export default function MiningSettingsInline({ username }: { username: string })
       await fetch(`/api/user/${username}/settings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updated),
+        body: JSON.stringify({ ...updated, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }),
       });
       mutate(`/api/user/${username}/settings`);
     } catch { /* ignore */ }

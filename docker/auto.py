@@ -162,6 +162,7 @@ _cached_settings: dict = {
     "speed": "medium",
     "mode": "always",
     "bandwidth": "5mb",
+    "timezone": "UTC",
     "schedule_start": 8,
     "schedule_end": 22,
     "download_start": 22,
@@ -184,6 +185,7 @@ def fetch_settings() -> dict:
             "speed": data.get("speed", "medium"),
             "mode": data.get("mode", "always"),
             "bandwidth": data.get("bandwidth", "5mb"),
+            "timezone": data.get("timezone", "UTC"),
             "schedule_start": int(data.get("schedule_start", 8)),
             "schedule_end": int(data.get("schedule_end", 22)),
             "download_start": int(data.get("download_start", 22)),
@@ -205,16 +207,34 @@ def fetch_settings() -> dict:
 
 
 def _is_in_window(start_hour: int, end_hour: int) -> bool:
-    """Check if the current local hour is within a time window.
+    """Check if the current hour (in the user's timezone) is within a time window.
 
+    Uses the timezone from settings, not the container's system clock.
     Handles wrap-around: e.g. start=22, end=6 means 22:00-05:59.
     """
-    now_hour = datetime.now().hour
+    tz_name = _cached_settings.get("timezone", "UTC")
+    try:
+        from zoneinfo import ZoneInfo
+        now_hour = datetime.now(ZoneInfo(tz_name)).hour
+    except Exception:
+        # Fallback: use TZ env var or system time
+        now_hour = datetime.now().hour
+
     if start_hour <= end_hour:
         return start_hour <= now_hour < end_hour
     else:
         # Wraps midnight: e.g. 22-6 means 22,23,0,1,2,3,4,5
         return now_hour >= start_hour or now_hour < end_hour
+
+
+def _user_hour() -> int:
+    """Get current hour in the user's timezone."""
+    tz_name = _cached_settings.get("timezone", "UTC")
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo(tz_name)).hour
+    except Exception:
+        return datetime.now().hour
 
 
 def _threads_for_speed(speed: str) -> int:
@@ -1674,7 +1694,7 @@ def main() -> None:
                     "[scheduled] Outside mining window (%02d:00-%02d:00). Current hour: %02d. Sleeping 60s.",
                     settings["schedule_start"],
                     settings["schedule_end"],
-                    datetime.now().hour,
+                    _user_hour(),
                 )
                 _interruptible_sleep(60)
 
@@ -1703,7 +1723,7 @@ def main() -> None:
                     settings["download_end"],
                     settings["schedule_start"],
                     settings["schedule_end"],
-                    datetime.now().hour,
+                    _user_hour(),
                 )
                 _interruptible_sleep(60)
 

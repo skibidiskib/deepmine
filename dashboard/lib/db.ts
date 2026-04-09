@@ -136,6 +136,10 @@ try {
 } catch { /* already exists */ }
 
 try {
+  db.exec(`ALTER TABLE user_settings ADD COLUMN timezone TEXT NOT NULL DEFAULT 'UTC'`);
+} catch { /* already exists */ }
+
+try {
   db.exec(`ALTER TABLE discoveries ADD COLUMN sequence_length INTEGER NOT NULL DEFAULT 0`);
 } catch { /* already exists */ }
 
@@ -615,6 +619,7 @@ export interface UserSettings {
   speed: string;
   mode: string;
   bandwidth: string;
+  timezone: string;
   schedule_start: number;
   schedule_end: number;
   download_start: number;
@@ -625,6 +630,7 @@ const USER_SETTINGS_DEFAULTS: UserSettings = {
   speed: 'medium',
   mode: 'always',
   bandwidth: '5mb',
+  timezone: 'UTC',
   schedule_start: 8,
   schedule_end: 22,
   download_start: 22,
@@ -632,16 +638,17 @@ const USER_SETTINGS_DEFAULTS: UserSettings = {
 };
 
 const stmtGetUserSettings = db.prepare(
-  `SELECT speed, mode, bandwidth, schedule_start, schedule_end, download_start, download_end FROM user_settings WHERE username = ?`
+  `SELECT speed, mode, bandwidth, timezone, schedule_start, schedule_end, download_start, download_end FROM user_settings WHERE username = ?`
 );
 
 const stmtUpsertUserSettings = db.prepare(`
-  INSERT INTO user_settings (username, speed, mode, bandwidth, schedule_start, schedule_end, download_start, download_end, updated_at)
-  VALUES (@username, @speed, @mode, @bandwidth, @schedule_start, @schedule_end, @download_start, @download_end, datetime('now'))
+  INSERT INTO user_settings (username, speed, mode, bandwidth, timezone, schedule_start, schedule_end, download_start, download_end, updated_at)
+  VALUES (@username, @speed, @mode, @bandwidth, @timezone, @schedule_start, @schedule_end, @download_start, @download_end, datetime('now'))
   ON CONFLICT(username) DO UPDATE SET
     speed = @speed,
     mode = @mode,
     bandwidth = @bandwidth,
+    timezone = @timezone,
     schedule_start = @schedule_start,
     schedule_end = @schedule_end,
     download_start = @download_start,
@@ -660,6 +667,7 @@ export function saveUserSettings(username: string, settings: UserSettings): void
     speed: settings.speed,
     mode: settings.mode,
     bandwidth: settings.bandwidth,
+    timezone: settings.timezone || 'UTC',
     schedule_start: settings.schedule_start,
     schedule_end: settings.schedule_end,
     download_start: settings.download_start,
