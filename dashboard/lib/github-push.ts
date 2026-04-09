@@ -83,15 +83,15 @@ export function pushDiscoveriesToGitHub(entries: BGCEntry[]): boolean {
 
     for (const entry of withSequences) {
       csvContent += [
-        entry.bgc_id,
-        entry.source_sample,
-        entry.bgc_type,
+        sanitizeField(entry.bgc_id),
+        sanitizeField(entry.source_sample),
+        sanitizeField(entry.bgc_type),
         entry.activity_score,
         entry.novelty_distance,
         entry.confidence,
         entry.sequence_length,
-        `"${entry.environment || ''}"`,
-        entry.username,
+        `"${sanitizeField(entry.environment || '')}"`,
+        sanitizeField(entry.username),
         entry.discovered_at,
       ].join(',') + '\n';
     }
@@ -112,19 +112,21 @@ export function pushDiscoveriesToGitHub(entries: BGCEntry[]): boolean {
 
     // Git add, commit, push
     const gitOpts = { cwd: REPO_DIR, timeout: 30000 };
-    execSync('git add -A', gitOpts);
+    spawnSync('git', ['add', '-A'], gitOpts);
 
-    const commitMsg = `Add ${withSequences.length} BGC${withSequences.length > 1 ? 's' : ''} from ${withSequences[0].source_sample} (${withSequences[0].environment || 'unknown'})`;
-    try {
-      spawnSync('git', ['commit', '-m', commitMsg], gitOpts);
-      execSync('git push origin main', gitOpts);
-      console.log(`[github] Pushed ${withSequences.length} discoveries to GitHub`);
-      return true;
-    } catch (err) {
-      // Nothing to commit (duplicate)
-      console.log('[github] No new changes to push');
+    const commitMsg = `Add ${withSequences.length} BGC${withSequences.length > 1 ? 's' : ''} from ${sanitizeField(withSequences[0].source_sample)} (${sanitizeField(withSequences[0].environment || 'unknown')})`;
+    const commit = spawnSync('git', ['commit', '-m', commitMsg], gitOpts);
+    if (commit.status !== 0) {
+      console.log('[github] No new changes to commit');
       return false;
     }
+    const push = spawnSync('git', ['push', 'origin', 'main'], gitOpts);
+    if (push.status !== 0) {
+      console.error('[github] Push failed:', push.stderr?.toString());
+      return false;
+    }
+    console.log(`[github] Pushed ${withSequences.length} discoveries to GitHub`);
+    return true;
   } catch (err) {
     console.error('[github] Failed to push discoveries:', err);
     return false;

@@ -1,7 +1,14 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import db, { clearAllData } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
+
+const ADMIN_SECRET = process.env.ADMIN_SECRET || '';
+
+function checkAdmin(request: NextRequest): boolean {
+  if (!ADMIN_SECRET) return false;
+  return request.headers.get('x-admin-secret') === ADMIN_SECRET;
+}
 
 // ── Realistic demo data generators ──────────────────────────────────────────
 
@@ -128,7 +135,10 @@ function makeBgcId(username: string, index: number): string {
 
 // ── Seed transaction ────────────────────────────────────────────────────────
 
-export async function POST() {
+export async function POST(request: NextRequest) {
+  if (!checkAdmin(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   try {
     // Prepared statements for seed
     const insertUser = db.prepare(`
@@ -325,7 +335,10 @@ export async function POST() {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(request: NextRequest) {
+  if (!checkAdmin(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   try {
     clearAllData();
     return NextResponse.json({ success: true, message: 'All data cleared' });

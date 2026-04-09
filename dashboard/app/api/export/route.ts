@@ -3,6 +3,10 @@ import { getAllDiscoveriesWithSequences, getDiscoveryStats } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
+function sanitize(v: string): string {
+  return String(v || '').replace(/[\n\r|>"<=+@\-]/g, '_').slice(0, 200);
+}
+
 /**
  * GET /api/export?format=fasta|csv|json
  *
@@ -22,13 +26,13 @@ export async function GET(request: NextRequest) {
         if (!d.sequence) continue;
         // FASTA header: >bgc_id|sample|type|score|environment|contributor
         const header = [
-          d.bgc_id,
-          d.source_sample,
-          d.bgc_type,
+          sanitize(d.bgc_id),
+          sanitize(d.source_sample),
+          sanitize(d.bgc_type),
           `score=${d.activity_score}`,
           `novelty=${d.novelty_distance}`,
-          d.environment_type || 'unknown',
-          `by=${d.username}`,
+          sanitize(d.environment_type || 'unknown'),
+          `by=${sanitize(d.username)}`,
           d.discovered_at,
         ].join('|');
         lines.push(`>${header}`);
@@ -49,18 +53,18 @@ export async function GET(request: NextRequest) {
 
     if (format === 'csv') {
       const header = 'bgc_id,source_sample,bgc_type,activity_score,novelty_distance,confidence,sequence_length,environment,location,contributor,discovered_at';
-      const rows = discoveries.map((d) =>
+      const rows = discoveries.map((d: any) =>
         [
-          d.bgc_id,
-          d.source_sample,
-          d.bgc_type,
+          sanitize(d.bgc_id),
+          sanitize(d.source_sample),
+          sanitize(d.bgc_type),
           d.activity_score,
           d.novelty_distance,
           d.confidence,
           d.sequence_length,
-          `"${d.environment_type || ''}"`,
-          `"${d.location_name || ''}"`,
-          d.username,
+          `"${sanitize(d.environment_type || '')}"`,
+          `"${sanitize(d.location_name || '')}"`,
+          sanitize(d.username),
           d.discovered_at,
         ].join(',')
       );

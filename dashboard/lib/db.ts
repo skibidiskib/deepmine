@@ -149,14 +149,18 @@ function hashPin(pin: string, salt?: string): string {
 }
 
 function verifyPin(pin: string, stored: string): boolean {
+  const { createHash, scryptSync, timingSafeEqual } = require('crypto');
   if (!stored.includes(':')) {
     // Legacy unsalted SHA-256 hash: migrate on verify
-    const { createHash } = require('crypto');
-    return createHash('sha256').update(pin).digest('hex') === stored;
+    const legacy = Buffer.from(createHash('sha256').update(pin).digest('hex'));
+    const ref = Buffer.from(stored);
+    if (legacy.length !== ref.length) return false;
+    return timingSafeEqual(legacy, ref);
   }
   const [salt, hash] = stored.split(':');
-  const { scryptSync } = require('crypto');
-  return scryptSync(pin, salt, 64).toString('hex') === hash;
+  const derived = scryptSync(pin, salt, 64);
+  const ref = Buffer.from(hash, 'hex');
+  return timingSafeEqual(derived, ref);
 }
 
 export function registerUser(username: string, pin: string): { success: boolean; error?: string } {

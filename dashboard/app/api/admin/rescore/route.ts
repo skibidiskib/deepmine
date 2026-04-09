@@ -1,19 +1,20 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { scoreNovelty } from '@/lib/novelty-scorer';
-import Database from 'better-sqlite3';
-import { join } from 'path';
+import db from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
-
-const dataDir = process.env.DEEPMINE_DATA_DIR || join(process.cwd(), 'data');
 
 /**
  * POST /api/admin/rescore
  * Re-score all existing discoveries that have sequences but novelty_distance = 0.
+ * Requires ADMIN_SECRET header.
  */
-export async function POST() {
+export async function POST(request: NextRequest) {
+  const secret = process.env.ADMIN_SECRET || '';
+  if (!secret || request.headers.get('x-admin-secret') !== secret) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   try {
-    const db = new Database(join(dataDir, 'deepmine-dash.db'));
 
     const discoveries = db.prepare(`
       SELECT id, bgc_id, sequence, novelty_distance
